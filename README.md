@@ -1,5 +1,4 @@
 # StockFlow — Enterprise Inventory & Order Management System
-**エンタープライズ在庫・受注統合管理システム**
 
 [![Java](https://img.shields.io/badge/Java-21%20%7C%2017-orange?logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.4-brightgreen?logo=springboot)](https://spring.io/projects/spring-boot)
@@ -7,260 +6,253 @@
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-blue?logo=mysql)](https://www.mysql.com/)
 [![React](https://img.shields.io/badge/React-19-61dafb?logo=react)](https://react.dev/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?logo=docker)](https://www.docker.com/)
-[![Tests](https://img.shields.io/badge/Tests-15%20Passed-success)](#automated-testing-strategy)
 
----
+StockFlow is a full-stack inventory and order management system designed for small and medium-sized businesses. It helps manage products, suppliers, warehouses, stock levels, customer orders, and inventory activity through a centralized application.
 
-## 1. Project Overview / プロジェクト概要
+The project focuses on practical software engineering concepts, including layered architecture, REST APIs, authentication, role-based access control, database transactions, inventory consistency, and automated testing.
 
-**StockFlow** is a production-grade, full-stack enterprise inventory and order management system built for small-to-medium enterprises (SMEs) managing multi-warehouse logistics, supplier deliveries, customer order pipelines, and real-time stock allocation.
+## Features
 
-Designed specifically to demonstrate professional software engineering standards for Software Engineer roles in Japan (Web / バックエンド / フルスタックエンジニア), the project emphasizes robust concurrency controls, strict database transaction boundaries (ACID), role-based access control (RBAC), immutable audit trails, and multi-layered testing.
+- **Product management:** Maintain product information, SKUs, and categories.
+- **Inventory tracking:** Monitor stock levels across multiple warehouses.
+- **Supplier management:** Organize supplier information and stock deliveries.
+- **Order management:** Create orders and track their lifecycle.
+- **Stock consistency:** Use database locking and transactions to help prevent overselling.
+- **Role-based access control:** Separate permissions for administrators, inventory managers, and sales employees.
+- **Audit logging:** Track important inventory and order changes.
+- **Reports:** Support inventory and order reporting, including CSV exports where implemented.
+- **API documentation:** Document REST endpoints using OpenAPI/Swagger where configured.
+- **Automated tests:** Test business logic and critical inventory operations.
+- **Container support:** Run the application with Docker Compose if the configuration is included.
 
-### Key Highlights
-- **High Concurrency & Zero Overselling (排他制御・売り越し防止)**: Pessimistic write locking (`SELECT ... FOR UPDATE`) prevents concurrent race conditions and double-allocation when multiple orders claim the same stock simultaneously.
-- **Strict Order Lifecycle Finite State Machine (状態遷移モデル)**: Predictable transitions (`CREATED` → `CONFIRMED` → `PROCESSING` → `SHIPPED` → `DELIVERED`), with automated stock restoration upon approved cancellation.
-- **Stateless RBAC Security**: JWT-based authentication with granular role-based permissions (`ROLE_ADMIN`, `ROLE_INVENTORY_MANAGER`, `ROLE_SALES_EMPLOYEE`).
-- **Immutable Enterprise Audit Logging (監査ログ)**: Automatically records before-and-after state transitions, actors, IP addresses, and timestamps for critical inventory adjustments.
-- **Automated Multi-Layer Testing**: Comprehensive JUnit 5 service tests and multi-threaded stress tests simulating concurrent buyers.
+## Technology Stack
 
----
+| Layer | Technology |
+|---|---|
+| Backend | Java, Spring Boot |
+| Security | Spring Security, JWT |
+| Persistence | Spring Data JPA, Hibernate |
+| Database | MySQL; H2 may be used for local testing |
+| Frontend | React, JavaScript, CSS |
+| Build tool | Maven |
+| Testing | JUnit 5, Mockito, Spring Boot Test |
+| API documentation | OpenAPI / Swagger |
+| Containerization | Docker, Docker Compose |
+| Version control | Git, GitHub |
 
-## 2. System Architecture / システムアーキテクチャ
+> Check the project files to confirm the exact versions and which optional integrations are configured.
 
-StockFlow follows an industry-standard layered enterprise architecture:
+## Architecture
 
-```mermaid
-graph TD
-    User([Browser Client]) -->|HTTPS / REST API| ViteReact[React 19 SPA + Vanilla CSS Glassmorphism]
-    ViteReact -->|Axios + JWT Bearer| Nginx[Reverse Proxy / API Gateway]
-    Nginx -->|Port 8080| SpringBoot[Spring Boot 3.3 Layered Backend]
-    
-    subgraph Spring Boot Backend
-        Security[Spring Security + JWT Filter]
-        Controllers[REST Controllers: Product, Order, Inventory, Report]
-        Services[Service Layer: Business Rules, Concurrency Locks]
-        Repos[Spring Data JPA Repositories]
-        Security --> Controllers
-        Controllers --> Services
-        Services --> Repos
-    end
+The application follows a layered architecture:
 
-    Repos -->|HikariCP Connection Pool| DB[(MySQL 8.0 / In-Memory H2)]
-    Services --> AuditLog[(Immutable Audit Log Trail)]
+```text
+React Frontend
+      |
+      | HTTP / REST API
+      v
+Spring Boot Controllers
+      |
+      v
+Service Layer
+(Business Rules and Transactions)
+      |
+      v
+Spring Data JPA Repositories
+      |
+      v
+Database (MySQL / H2)
 ```
 
----
+The controller layer handles incoming API requests, the service layer implements business rules, and the repository layer manages database operations.
 
-## 3. Concurrency Control & Preventing Overselling / 排他制御と売り越し防止の技術的工夫
+## Core Modules
 
-### The Problem (同時実行時の課題)
-In high-throughput e-commerce and B2B platforms, multiple customers frequently attempt to purchase the final remaining units of an inventory item at the exact same millisecond. Without proper concurrency controls, two concurrent transactions can read `quantityAvailable = 5`, approve two 4-unit orders, and oversell the stock to `-3`.
+### 1. Authentication and Authorization
+- User login and authentication.
+- Role-based permissions for protected operations.
+- Roles may include `ROLE_ADMIN`, `ROLE_INVENTORY_MANAGER`, and `ROLE_SALES_EMPLOYEE`.
 
-### The Solution: Pessimistic Locking with ACID Boundaries
-StockFlow prevents overselling using database-level pessimistic locking (`PESSIMISTIC_WRITE` translating to SQL `SELECT ... FOR UPDATE`):
+### 2. Product and Supplier Management
+- Maintain product and category information.
+- Associate products with suppliers.
+- Search and filter product records.
 
-```java
-// InventoryRepository.java
-@Lock(LockModeType.PESSIMISTIC_WRITE)
-@Query("SELECT i FROM Inventory i WHERE i.product.id = :productId AND i.warehouse.id = :warehouseId")
-Optional<Inventory> findByProductIdAndWarehouseIdForUpdate(
-    @Param("productId") Long productId,
-    @Param("warehouseId") Long warehouseId
-);
+### 3. Inventory Management
+- View stock by product and warehouse.
+- Record stock receipts and adjustments.
+- Track inventory movements.
+- Support warehouse transfers if implemented.
+
+### 4. Order Management
+- Create and track customer orders.
+- Validate order status transitions.
+- Deduct stock when an order is confirmed.
+- Restore stock when an eligible order is cancelled, if implemented.
+
+### 5. Reporting and Audit
+- View inventory and order summaries.
+- Export reports where available.
+- Record important changes for traceability.
+
+## Concurrency and Data Integrity
+
+Inventory systems must handle cases where multiple orders attempt to purchase the same available stock. StockFlow can use transactional service methods and database-level pessimistic locking to ensure that stock is checked and updated safely.
+
+For example, Spring Data JPA supports locking repository queries with `@Lock(LockModeType.PESSIMISTIC_WRITE)`. When correctly applied within a transaction, this can prevent concurrent transactions from allocating the same inventory units.
+
+The actual locking strategy and test coverage should be verified against the implementation in this repository.
+
+## Getting Started
+
+### Prerequisites
+
+Install the following tools as required by your project configuration:
+
+- Java 17 or Java 21 JDK
+- Node.js and npm
+- Git
+- MySQL, or Docker if a Compose configuration is provided
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/HarshiniKC03/StockFlow.git
+cd StockFlow
 ```
 
-```java
-// InventoryService.java
-@Transactional(isolation = Isolation.READ_COMMITTED)
-public Inventory deductStockForOrder(Long productId, Long warehouseId, int quantity, String orderNumber) {
-    // Row is locked exclusively until the transaction commits or rolls back
-    Inventory inventory = inventoryRepository.findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
-        .orElseThrow(() -> new ResourceNotFoundException("Inventory not found"));
+### 2. Start the backend
 
-    if (inventory.getQuantityAvailable() < quantity) {
-        throw new InsufficientStockException("Overselling prevented: Requested " + quantity 
-            + " units, but only " + inventory.getQuantityAvailable() + " available.");
-    }
+If the backend is located in a `backend` directory and includes a Maven wrapper:
 
-    inventory.setQuantityAvailable(inventory.getQuantityAvailable() - quantity);
-    recordMovement(inventory, -quantity, MovementType.ORDER_FULFILLMENT, orderNumber);
-    return inventoryRepository.save(inventory);
-}
+**Windows (PowerShell or Command Prompt):**
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run
 ```
 
-### Verified by Multi-Threaded Concurrency Test (`InventoryConcurrencyTest.java`)
-A multi-threaded JUnit test launches 10 concurrent threads simultaneously requesting stock against a warehouse holding only 20 units. The test guarantees that:
-1. Exactly available units are allocated.
-2. Excessive requests are cleanly rejected with `InsufficientStockException`.
-3. Stock quantity never drops below zero.
+**macOS / Linux:**
 
----
-
-## 4. Database Schema & ERD / データベース設計
-
-```mermaid
-erDiagram
-    USERS ||--o{ USER_ROLES : has
-    ROLES ||--o{ USER_ROLES : assigned
-    CATEGORIES ||--o{ PRODUCTS : categorizes
-    SUPPLIERS ||--o{ PRODUCTS : supplies
-    WAREHOUSES ||--o{ INVENTORY : stores
-    PRODUCTS ||--o{ INVENTORY : tracked_in
-    CUSTOMERS ||--o{ ORDERS : places
-    WAREHOUSES ||--o{ ORDERS : fulfills_from
-    ORDERS ||--|{ ORDER_ITEMS : contains
-    PRODUCTS ||--o{ ORDER_ITEMS : referenced_in
-    PRODUCTS ||--o{ INVENTORY_MOVEMENTS : logs
-    WAREHOUSES ||--o{ INVENTORY_MOVEMENTS : located_at
-    SUPPLIERS ||--o{ STOCK_RECEIPTS : delivers
-    AUDIT_LOGS {
-        bigint id PK
-        varchar username
-        varchar action
-        varchar entity_name
-        bigint entity_id
-        varchar previous_value
-        varchar new_value
-        timestamp timestamp
-    }
+```bash
+cd backend
+./mvnw spring-boot:run
 ```
 
----
+If there is no Maven wrapper, use Maven installed on your system:
 
-## 5. System Roles & Permissions / 権限管理マトリクス
+```bash
+mvn spring-boot:run
+```
 
-| Role | 日本語ロール名 | Capabilities & Boundaries |
-|---|---|---|
-| `ROLE_ADMIN` | システム管理者 | Full user management, role assignments, category/warehouse configuration, audit trail inspection |
-| `ROLE_INVENTORY_MANAGER` | 在庫管理責任者 | Inbound stock receipts, manual stock adjustments, inter-warehouse transfers, low-stock alerts, CSV reporting |
-| `ROLE_SALES_EMPLOYEE` | 営業・受発注担当者 | Product catalog lookup, customer order placement, order status tracking, cancellation request handling |
+Configure the database and other required settings according to the application's configuration files. Do not commit real passwords, tokens, or other secrets.
 
----
+### 3. Start the frontend
 
-## 6. Core REST API Endpoints / 主要APIエンドポイント
+Open a second terminal:
 
-Interactive Swagger / OpenAPI UI is accessible at: `http://localhost:8080/swagger-ui.html`
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-| Method | Endpoint | Description | Access Role |
-|---|---|---|---|
-| `POST` | `/api/auth/login` | Authenticate and issue JWT token | Public |
-| `GET` | `/api/products` | Search & filter products by name/SKU/category | Authenticated |
-| `POST` | `/api/products` | Register a new product SKU | Manager / Admin |
-| `GET` | `/api/inventory` | View stock per warehouse location | Authenticated |
-| `POST` | `/api/inventory/receipts` | Record supplier delivery & update stock | Manager / Admin |
-| `POST` | `/api/inventory/adjust` | Manual inventory adjustment with audit reason | Manager / Admin |
-| `POST` | `/api/inventory/transfer` | Transfer stock between warehouses | Manager / Admin |
-| `POST` | `/api/orders` | Create customer order with line items | Sales / Manager / Admin |
-| `POST` | `/api/orders/{id}/confirm` | Confirm order and deduct stock atomically | Sales / Manager / Admin |
-| `POST` | `/api/orders/{id}/cancel` | Cancel order and automatically restore stock | Sales / Manager / Admin |
-| `GET` | `/api/reports/dashboard` | Aggregated business KPIs and order status breakdown | Authenticated |
-| `GET` | `/api/reports/inventory/csv`| Stream complete inventory CSV file | Manager / Admin |
-| `GET` | `/api/reports/orders/csv` | Stream orders history CSV file | Manager / Admin |
-| `GET` | `/api/audit-logs` | Query immutable audit log records with diffs | Admin Only |
+The development server address will be shown in the terminal. A common Vite address is `http://localhost:5173`.
 
----
+### 4. Run tests
 
-## 7. Automated Testing Strategy / 自動テスト検証
+If the backend includes a Maven wrapper:
 
-The backend includes comprehensive unit, integration, and concurrency tests executed via JUnit 5 and Spring Boot Test:
+**Windows:**
+
+```powershell
+cd backend
+.\mvnw.cmd test
+```
+
+**macOS / Linux:**
 
 ```bash
 cd backend
 ./mvnw test
 ```
 
-### Test Suite Summary (15/15 Passed):
-- `InventoryConcurrencyTest`: Simulates 10 concurrent threads competing for finite warehouse stock; verifies pessimistic locking and prevents overselling.
-- `OrderServiceTest`: Validates total calculations, customer auto-provisioning, order creation, and invalid state transition guards.
-- `InventoryServiceTest`: Tests inbound stock receipts, manual adjustments, inter-warehouse transfers, and stock restoration on order cancellation.
-- `ProductServiceTest`: Tests SKU uniqueness enforcement, price boundary validation, and soft-deactivation.
-
----
-
-## 8. Quick Start & Local Execution / ローカル実行手順
-
-### Prerequisites
-- Java 17 or Java 21 JDK
-- Node.js 18+ and npm
-- (Optional) Docker and Docker Compose
-
-### Option A: Standard Local Execution (Recommended for Fast Testing)
-
-#### 1. Launch Spring Boot Backend
-```bash
-cd backend
-./mvnw spring-boot:run
-```
-> The application starts on `http://localhost:8080` with embedded H2 in-memory database and pre-seeded test data.
-> Swagger documentation is available at `http://localhost:8080/swagger-ui.html`.
-
-#### 2. Launch React Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-> The frontend will launch at `http://localhost:5173`.
-
-#### 3. Default Demo Accounts
-| Username | Password | Role |
-|---|---|---|
-| `admin` | `admin123` | Administrator (システム管理者) |
-| `manager` | `manager123` | Inventory Manager (在庫管理責任者) |
-| `sales` | `sales123` | Sales Employee (営業担当) |
-
----
-
-### Option B: Docker Compose Multi-Container Deployment
-
-Run the complete multi-tier enterprise stack (MySQL 8 + Spring Boot + React + Nginx) with one command:
+Otherwise, run:
 
 ```bash
-docker compose up --build -d
+mvn test
 ```
-- Frontend UI: `http://localhost:3000`
-- Backend API: `http://localhost:8080`
-- MySQL 8.0: `localhost:3306` (`stockflowdb`)
 
----
+### 5. Run with Docker Compose (Optional)
 
-## 9. Interview Talking Points for Japan Software Engineer Applications
-### (日本IT企業の面接・職務経歴書でアピールできる技術的ポイント)
+If the repository contains a `docker-compose.yml` file and the necessary configuration is set up, run:
 
-日本のWeb系・自社開発企業の採用面接（バックエンド／フルスタック）で効果的に説明できるトピックを整理しています：
+```bash
+docker compose up --build
+```
 
-#### Q1. なぜこのシステムを開発したのですか？（開発動機）
-> **回答例:**
-> 「中小企業や物流拠点において、スプレッドシートや単一システムによる管理では『同時注文による売り越し（Overselling）』や『在庫変更のトレーサビリティ欠如』が頻発しています。これらを解決するため、排他制御による正確な在庫引き当て、ロール別の認可制御、状態遷移モデルに基づく受注管理、および完全な監査証跡（Audit Trail）を備えた堅牢なエンタープライズ在庫管理システムを設計・実装しました。」
+## API Documentation
 
-#### Q2. 最もこだわった技術的工夫は何ですか？（排他制御・トランザクション管理）
-> **回答例:**
-> 「複数顧客が同時に残り僅かな在庫を注文した際の『売り越し事故』を防ぐため、Spring Data JPAの悲観的排他ロック（`@Lock(LockModeType.PESSIMISTIC_WRITE)` / `SELECT ... FOR UPDATE`）を採用しました。また、受注確定から在庫引き当て、在庫変動履歴の記録までを1つの`@Transactional`境界内でアトミックにコミットさせ、障害時のデータ不整合（Inconsistency）を完全に排除しています。この挙動はマルチスレッドを用いた自動並行性テスト（`InventoryConcurrencyTest`）で検証済みです。」
+If OpenAPI/Swagger is configured in the backend, start the application and open the documentation URL configured by the project. A common Springdoc URL is:
 
-#### Q3. 状態管理やビジネスロジックで配慮した点は何ですか？
-> **回答例:**
-> 「受注のステータスを有限状態機械（FSM）として定義し、配送済み（DELIVERED）の注文が誤ってキャンセルAPIで取り消されるような不正な状態遷移をサーバーサイドで厳密に拒絶しています。また、注文キャンセル時には確定時に引き当てられた在庫が安全に倉庫へリストアされ、理由付きで在庫移動台帳に記録される連動ロジックを実装しました。」
+```text
+http://localhost:8080/swagger-ui/index.html
+```
 
-#### Q4. フロントエンドでのUI/UXの配慮は何ですか？
-> **回答例:**
-> 「在庫の逼迫度合いを直感的に把握できるよう、しきい値に応じたカラーバッジや、倉庫ごとの切り替えセレクタ、リアルタイムのアラート通知バッジを実装しました。また、CSVエクスポート機能により現場の担当者が既存の経理・ERPシステムと容易に連携できるように配慮しています。」
+The exact URL depends on the project's dependencies and configuration.
 
----
+## Example API Areas
 
-## 10. Technical Keywords Glossary / 技術用語対訳表
+The API may provide endpoints for these functional areas, depending on the implementation:
 
-| English Term | 日本語技術用語 | Context in StockFlow |
-|---|---|---|
-| Pessimistic Lock | 悲観的ロック (排他ロック) | Stock row lock (`FOR UPDATE`) preventing overselling |
-| Race Condition | 競合状態 (レースコンディション) | Concurrent orders targeting the same SKU quantity |
-| ACID Transaction | ACIDトランザクション | Multi-table order creation + stock deduction atomicity |
-| Role-Based Access Control | ロールベースアクセス制御 (RBAC) | Admin / Manager / Sales permission boundaries |
-| Audit Trail / Logging | 監査ログ・証跡管理 | Tracking before/after values of inventory adjustments |
-| Finite State Machine | 有限状態機械 (状態遷移モデル) | Valid order flow: `CREATED` → `CONFIRMED` → `DELIVERED` |
-| Idempotency | 冪等性 (べきとうせい) | Safe retry and deterministic state updates |
+| Area | Example operations |
+|---|---|
+| Authentication | Login |
+| Products | List, search, create, update |
+| Inventory | View stock, receive stock, adjust stock |
+| Orders | Create, confirm, cancel, track |
+| Reports | Dashboard summaries, CSV exports |
+| Audit | View audit events |
 
----
+Refer to the actual controller classes or Swagger documentation for the available endpoints.
 
-## 11. License
-This project is open-source under the [MIT License](LICENSE).
+## Project Structure
+
+A typical project layout may look like this:
+
+```text
+StockFlow/
+├── backend/
+│   ├── src/
+│   ├── pom.xml
+│   └── mvnw / mvnw.cmd
+├── frontend/
+│   ├── src/
+│   ├── package.json
+│   └── vite.config.js
+├── docker-compose.yml
+├── .gitignore
+├── LICENSE
+└── README.md
+```
+
+The exact structure may differ depending on the files currently in the repository.
+
+## Future Improvements
+
+- Add more integration and concurrency tests.
+- Add CI workflows for automated builds and tests.
+- Add deployment instructions for a cloud environment.
+- Improve monitoring, error handling, and operational documentation.
+- Add more comprehensive API examples and screenshots.
+
+## Contributing
+
+1. Fork the repository.
+2. Create a feature branch.
+3. Make and test your changes.
+4. Submit a pull request with a clear description.
+
+## License
+
+Add or update the `LICENSE` file to state the license under which this project is distributed.
