@@ -252,7 +252,3 @@ The exact structure may differ depending on the files currently in the repositor
 2. Create a feature branch.
 3. Make and test your changes.
 4. Submit a pull request with a clear description.
-
-## License
-
-Add or update the `LICENSE` file to state the license under which this project is distributed.
